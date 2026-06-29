@@ -211,6 +211,7 @@ namespace SiteReportApp.Services
             var entity = await _db.Initiatives.FindAsync(id);
             if (entity != null)
             {
+                await EnsurePeriodIsOpenAsync(entity.ReportPeriodId);
                 _db.Initiatives.Remove(entity);
                 await _db.SaveChangesAsync();
             }
@@ -221,6 +222,7 @@ namespace SiteReportApp.Services
             var entity = await _db.TrainingRecords.FindAsync(id);
             if (entity != null)
             {
+                await EnsurePeriodIsOpenAsync(entity.ReportPeriodId);
                 _db.TrainingRecords.Remove(entity);
                 await _db.SaveChangesAsync();
             }
@@ -231,6 +233,7 @@ namespace SiteReportApp.Services
             var entity = await _db.CostSavingInitiatives.FindAsync(id);
             if (entity != null)
             {
+                await EnsurePeriodIsOpenAsync(entity.ReportPeriodId);
                 _db.CostSavingInitiatives.Remove(entity);
                 await _db.SaveChangesAsync();
             }
