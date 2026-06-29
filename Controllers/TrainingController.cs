@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using SiteReportApp.Data;
 using SiteReportApp.Dtos;
 using SiteReportApp.Services;
 
@@ -9,10 +11,24 @@ namespace SiteReportApp.Controllers
     public class TrainingController : ControllerBase
     {
         private readonly DataEntryService _entry;
+        private readonly AppDbContext _db;
 
-        public TrainingController(DataEntryService entry)
+        public TrainingController(DataEntryService entry, AppDbContext db)
         {
             _entry = entry;
+            _db = db;
+        }
+
+        // GET /api/training?siteId=1&reportPeriodId=5
+        // Added so the frontend can show previously saved rows (and their ids, for delete).
+        [HttpGet]
+        public async Task<IActionResult> GetForSiteAndPeriod([FromQuery] int siteId, [FromQuery] int reportPeriodId)
+        {
+            var data = await _db.TrainingRecords
+                .Where(t => t.SiteId == siteId && t.ReportPeriodId == reportPeriodId)
+                .OrderBy(t => t.SerialNo)
+                .ToListAsync();
+            return Ok(data);
         }
 
         // POST /api/training/bulk
@@ -34,8 +50,15 @@ namespace SiteReportApp.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
-            await _entry.DeleteTrainingAsync(id);
-            return NoContent();
+            try
+            {
+                await _entry.DeleteTrainingAsync(id);
+                return NoContent();
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { error = ex.Message });
+            }
         }
     }
 }
