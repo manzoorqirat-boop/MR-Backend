@@ -1,0 +1,13 @@
+# .NET
+backend/bin/
+backend/obj/
+backend/*.user
+
+# Node / React (for when frontend is added)
+frontend/node_modules/
+frontend/dist/
+frontend/.env
+
+# OS/editor noise
+.DS_Store
+*.swp
