@@ -85,7 +85,7 @@ namespace SiteReportApp.Services
                 {
                     SiteId = siteId,
                     ReportPeriodId = reportPeriodId,
-                    SerialNo = (int)row.Cell(1).GetDouble(),
+                    SerialNo = ReadSerial(row),
                     Topic = topic,
                     TrainingImpartedBy = row.Cell(3).GetString().Trim(),
                     Department = row.Cell(5).GetString().Trim(),
@@ -124,7 +124,7 @@ namespace SiteReportApp.Services
                     SiteId = siteId,
                     ReportPeriodId = reportPeriodId,
                     Type = type.ToString(),
-                    SerialNo = (int)row.Cell(1).GetDouble(),
+                    SerialNo = ReadSerial(row),
                     Name = name,
                     Department = department,
                     Category = category,
@@ -162,7 +162,7 @@ namespace SiteReportApp.Services
                 {
                     SiteId = siteId,
                     ReportPeriodId = reportPeriodId,
-                    SerialNo = (int)row.Cell(1).GetDouble(),
+                    SerialNo = ReadSerial(row),
                     ProjectName = projectName,
                     PotentialSavingLacs = saving,
                     ProjectStatus = MapProjectStatus(statusRaw, row.RowNumber(), warnings),
@@ -171,6 +171,17 @@ namespace SiteReportApp.Services
                 });
             }
             return dto;
+        }
+
+        // S.No cells are sometimes blank or stored as text; never let that crash the whole import.
+        private static int ReadSerial(IXLRow row)
+        {
+            var cell = row.Cell(1);
+            if (cell.TryGetValue<double>(out var n))
+                return (int)n;
+            if (int.TryParse(cell.GetString().Trim(), out var i))
+                return i;
+            return 0;
         }
 
         // ---- Status text mapping helpers (sheets use free text like "Completed", "In Progress", "Completion") ----
