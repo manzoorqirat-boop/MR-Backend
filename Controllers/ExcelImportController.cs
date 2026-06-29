@@ -1,4 +1,6 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
+using SiteReportApp.Data;
 using SiteReportApp.Services;
 
 namespace SiteReportApp.Controllers
@@ -9,11 +11,13 @@ namespace SiteReportApp.Controllers
     {
         private readonly ExcelImportService _excelImport;
         private readonly DataEntryService _entry;
+        private readonly AppDbContext _db;
 
-        public ExcelImportController(ExcelImportService excelImport, DataEntryService entry)
+        public ExcelImportController(ExcelImportService excelImport, DataEntryService entry, AppDbContext db)
         {
             _excelImport = excelImport;
             _entry = entry;
+            _db = db;
         }
 
         // POST /api/excel-import?siteId=1&reportPeriodId=5
@@ -32,35 +36,60 @@ namespace SiteReportApp.Controllers
             if (!file.FileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
                 return BadRequest(new { error = "Only .xlsx files are supported." });
 
-            using var stream = file.OpenReadStream();
-            var parsed = _excelImport.ParseWorkbook(stream, siteId, reportPeriodId);
-
-            var summary = new
+            ExcelImportService.ParsedImport parsed;
+            try
             {
-                training = parsed.Training != null
-                    ? await _entry.SaveTrainingAsync(parsed.Training)
-                    : null,
-                initiatives = new List<object>(),
-                costSavings = parsed.CostSavings != null
-                    ? await _entry.SaveCostSavingsAsync(parsed.CostSavings)
-                    : null,
-                warnings = parsed.Warnings
-            };
-
-            var initiativeResults = new List<object>();
-            foreach (var initiativeDto in parsed.Initiatives)
+                using var stream = file.OpenReadStream();
+                parsed = _excelImport.ParseWorkbook(stream, siteId, reportPeriodId);
+            }
+            catch (Exception ex)
             {
-                var res = await _entry.SaveInitiativesAsync(initiativeDto);
-                initiativeResults.Add(new { type = initiativeDto.Type, result = res });
+                // Malformed/corrupt workbook, unexpected cell types, etc.
+                return BadRequest(new { error = $"Could not read the workbook: {ex.Message}" });
             }
 
-            return Ok(new
+            // Save everything inside one transaction: if any sheet fails (e.g. the period
+            // is locked, or a foreign key is invalid) nothing is persisted, so a re-import
+            // after fixing the issue won't leave half the workbook behind.
+            await using var tx = await _db.Database.BeginTransactionAsync();
+            try
             {
-                training = summary.training,
-                initiatives = initiativeResults,
-                costSavings = summary.costSavings,
-                warnings = summary.warnings
-            });
+                var trainingResult = parsed.Training != null
+                    ? await _entry.SaveTrainingAsync(parsed.Training)
+                    : null;
+
+                var initiativeResults = new List<object>();
+                foreach (var initiativeDto in parsed.Initiatives)
+                {
+                    var res = await _entry.SaveInitiativesAsync(initiativeDto);
+                    initiativeResults.Add(new { type = initiativeDto.Type, result = res });
+                }
+
+                var costSavingsResult = parsed.CostSavings != null
+                    ? await _entry.SaveCostSavingsAsync(parsed.CostSavings)
+                    : null;
+
+                await tx.CommitAsync();
+
+                return Ok(new
+                {
+                    training = trainingResult,
+                    initiatives = initiativeResults,
+                    costSavings = costSavingsResult,
+                    warnings = parsed.Warnings
+                });
+            }
+            catch (InvalidOperationException ex)
+            {
+                // Thrown by DataEntryService when the report period is locked / not found.
+                await tx.RollbackAsync();
+                return Conflict(new { error = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                await tx.RollbackAsync();
+                return StatusCode(500, new { error = $"Import failed and was rolled back: {ex.Message}" });
+            }
         }
     }
 }
