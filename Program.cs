@@ -26,15 +26,20 @@ builder.Services.AddScoped<AnalyticsService>();
 builder.Services.AddScoped<DataEntryService>();
 builder.Services.AddScoped<ExcelImportService>();
 
-// ---- CORS: allow your React frontend (adjust origin for prod) ----
+// ---- CORS: allow your React frontend ----
+// The deployed frontend origin comes from the FRONTEND_URL env var (set this on the
+// backend's Railway service to your frontend's public URL, e.g.
+// https://your-frontend.up.railway.app). localhost:5173 is always allowed for local dev.
+var frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL");
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        policy.WithOrigins(
-                "http://localhost:5173",                 // local Vite dev
-                "https://your-frontend.up.railway.app"   // replace with deployed frontend URL
-              )
+        var origins = new List<string> { "http://localhost:5173" };
+        if (!string.IsNullOrWhiteSpace(frontendUrl))
+            origins.Add(frontendUrl.TrimEnd('/'));
+
+        policy.WithOrigins(origins.ToArray())
               .AllowAnyHeader()
               .AllowAnyMethod();
     });
@@ -55,6 +60,17 @@ var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
 var app = builder.Build();
+
+// ---- Ensure the database schema exists ----
+// On a fresh Railway Postgres there are no tables yet, so every query would 500.
+// EnsureCreated() creates the schema from the model on first run and is a no-op
+// afterwards. NOTE: EnsureCreated and EF migrations don't mix — if you later add
+// migrations, switch this to db.Database.Migrate() instead.
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    db.Database.EnsureCreated();
+}
 
 if (app.Environment.IsDevelopment())
 {
