@@ -1,27 +1,42 @@
-namespace SiteReportApp.Models
+using Microsoft.AspNetCore.Mvc;
+using SiteReportApp.Dtos;
+using SiteReportApp.Services;
+
+namespace SiteReportApp.Controllers
 {
-    // Covers sheets: Documentation Simplification, Regulatory Compliance,
-    // Productivity Enhancement, Lean Laboratory, Digitalization.
-    // The "Type" field distinguishes which sheet a row belongs to.
-    public class Initiative
+    [ApiController]
+    [Route("api/initiatives")]
+    public class InitiativesController : ControllerBase
     {
-        public int Id { get; set; }
+        private readonly DataEntryService _entry;
 
-        public int SiteId { get; set; }
-        public Site Site { get; set; } = null!;
+        public InitiativesController(DataEntryService entry)
+        {
+            _entry = entry;
+        }
 
-        public int ReportPeriodId { get; set; }
-        public ReportPeriod ReportPeriod { get; set; } = null!;
+        // POST /api/initiatives/bulk
+        // body: { siteId, reportPeriodId, type, rows: [...] }
+        [HttpPost("bulk")]
+        public async Task<IActionResult> SaveBulk([FromBody] InitiativeBulkCreateDto request)
+        {
+            try
+            {
+                var result = await _entry.SaveInitiativesAsync(request);
+                return Ok(result);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Conflict(new { error = ex.Message });
+            }
+        }
 
-        public InitiativeType Type { get; set; }
-
-        public int SerialNo { get; set; }                 // S.No from sheet
-        public string Name { get; set; } = string.Empty;   // value of the sheet's "topic" column
-        public string Department { get; set; } = string.Empty;
-        public string? Category { get; set; }              // only Lean Lab & Digitalization use this
-        public string FacilitatorName { get; set; } = string.Empty;
-        public string DepartmentHead { get; set; } = string.Empty;
-        public CompletionStatus Status { get; set; }
-        public string? Remarks { get; set; }
+        // DELETE /api/initiatives/5
+        [HttpDelete("{id}")]
+        public async Task<IActionResult> Delete(int id)
+        {
+            await _entry.DeleteInitiativeAsync(id);
+            return NoContent();
+        }
     }
 }
