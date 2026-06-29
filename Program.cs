@@ -40,7 +40,13 @@ builder.Services.AddCors(options =>
     });
 });
 
-builder.Services.AddControllers();
+// Serialize enums (CompletionStatus, TrainingStatus, ProjectStatus, ReportPeriodStatus, InitiativeType)
+// as their string names instead of raw integers — the frontend matches against names like
+// "Completed" / "InProgress" (see index.css .status-* classes and constants.js).
+builder.Services.AddControllers()
+    .AddJsonOptions(options =>
+        options.JsonSerializerOptions.Converters.Add(
+            new System.Text.Json.Serialization.JsonStringEnumConverter()));
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
