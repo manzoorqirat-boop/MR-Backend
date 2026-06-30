@@ -1,3 +1,8 @@
+using Microsoft.EntityFrameworkCore;
+using SiteReportApp.Data;
+using SiteReportApp.Services;
+
+var builder = WebApplication.CreateBuilder(args);
 
 // ---- Database: Postgres on Railway ----
 // Railway injects DATABASE_URL like: postgres://user:pass@host:port/dbname
@@ -31,11 +36,6 @@ var frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL");
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
-using Microsoft.EntityFrameworkCore;
-using SiteReportApp.Data;
-using SiteReportApp.Services;
-
-var builder = WebApplication.CreateBuilder(args);
     {
         var origins = new List<string> { "http://localhost:5173" };
         if (!string.IsNullOrWhiteSpace(frontendUrl))
