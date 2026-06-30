@@ -48,6 +48,12 @@ namespace SiteReportApp.Data
             modelBuilder.Entity<Initiative>()
                 .HasIndex(i => new { i.ReportPeriodId, i.SiteId, i.Type });
 
+            // Natural key: one row per serial within a site/period/type. Prevents
+            // duplicate rows from a re-import or a double-submit (see DataEntryService upsert).
+            modelBuilder.Entity<Initiative>()
+                .HasIndex(i => new { i.SiteId, i.ReportPeriodId, i.Type, i.SerialNo })
+                .IsUnique();
+
             modelBuilder.Entity<Initiative>()
                 .HasOne(i => i.Site)
                 .WithMany(s => s.Initiatives)
@@ -73,6 +79,10 @@ namespace SiteReportApp.Data
                 .HasIndex(t => new { t.ReportPeriodId, t.SiteId });
 
             modelBuilder.Entity<TrainingRecord>()
+                .HasIndex(t => new { t.SiteId, t.ReportPeriodId, t.SerialNo })
+                .IsUnique();
+
+            modelBuilder.Entity<TrainingRecord>()
                 .HasOne(t => t.Site)
                 .WithMany(s => s.TrainingRecords)
                 .HasForeignKey(t => t.SiteId)
@@ -91,6 +101,10 @@ namespace SiteReportApp.Data
             // ---- CostSavingInitiative ----
             modelBuilder.Entity<CostSavingInitiative>()
                 .HasIndex(c => new { c.ReportPeriodId, c.SiteId });
+
+            modelBuilder.Entity<CostSavingInitiative>()
+                .HasIndex(c => new { c.SiteId, c.ReportPeriodId, c.SerialNo })
+                .IsUnique();
 
             modelBuilder.Entity<CostSavingInitiative>()
                 .HasOne(c => c.Site)
