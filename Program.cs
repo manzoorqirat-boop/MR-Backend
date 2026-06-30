@@ -25,6 +25,8 @@ builder.Services.AddDbContext<AppDbContext>(options =>
 builder.Services.AddScoped<AnalyticsService>();
 builder.Services.AddScoped<DataEntryService>();
 builder.Services.AddScoped<ExcelImportService>();
+builder.Services.AddScoped<ScorecardService>();
+builder.Services.AddScoped<ScorecardExcelService>();
 
 // ---- CORS: allow your React frontend ----
 // The deployed frontend origin comes from the FRONTEND_URL env var (set this on the
