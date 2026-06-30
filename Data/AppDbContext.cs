@@ -13,6 +13,7 @@ namespace SiteReportApp.Data
         public DbSet<Initiative> Initiatives => Set<Initiative>();
         public DbSet<TrainingRecord> TrainingRecords => Set<TrainingRecord>();
         public DbSet<CostSavingInitiative> CostSavingInitiatives => Set<CostSavingInitiative>();
+        public DbSet<ScorecardEntry> ScorecardEntries => Set<ScorecardEntry>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -126,6 +127,36 @@ namespace SiteReportApp.Data
             modelBuilder.Entity<CostSavingInitiative>()
                 .Property(c => c.PotentialSavingLacs)
                 .HasPrecision(14, 2);
+
+            // ---- ScorecardEntry (Monthly Site Scorecard, 20-sheet metrics) ----
+            // One row per (site, period, metric, rowIndex). The composite index is the
+            // shape every read/analytics query filters by. CellsJson holds the input cells.
+            modelBuilder.Entity<ScorecardEntry>()
+                .HasIndex(e => new { e.SiteId, e.ReportPeriodId, e.MetricKey });
+
+            modelBuilder.Entity<ScorecardEntry>()
+                .HasIndex(e => new { e.SiteId, e.ReportPeriodId, e.MetricKey, e.RowIndex })
+                .IsUnique();
+
+            // Analytics groups by metric + period across sites.
+            modelBuilder.Entity<ScorecardEntry>()
+                .HasIndex(e => new { e.MetricKey, e.ReportPeriodId });
+
+            modelBuilder.Entity<ScorecardEntry>()
+                .Property(e => e.MetricKey)
+                .HasMaxLength(64);
+
+            modelBuilder.Entity<ScorecardEntry>()
+                .HasOne(e => e.Site)
+                .WithMany()
+                .HasForeignKey(e => e.SiteId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<ScorecardEntry>()
+                .HasOne(e => e.ReportPeriod)
+                .WithMany()
+                .HasForeignKey(e => e.ReportPeriodId)
+                .OnDelete(DeleteBehavior.Restrict);
         }
     }
 }
