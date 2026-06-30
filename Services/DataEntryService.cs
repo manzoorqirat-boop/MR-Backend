@@ -25,6 +25,9 @@ namespace SiteReportApp.Services
         }
 
         // ---- Initiatives (sheets 2-6) ----
+        // Upsert by natural key (SiteId, ReportPeriodId, Type, SerialNo): existing rows are
+        // updated in place, new serials are inserted. This makes re-imports and double-submits
+        // idempotent instead of creating duplicate rows.
         public async Task<ImportResultDto> SaveInitiativesAsync(InitiativeBulkCreateDto request)
         {
             await EnsurePeriodIsOpenAsync(request.ReportPeriodId);
@@ -37,7 +40,14 @@ namespace SiteReportApp.Services
                 return result;
             }
 
-            var entities = new List<Initiative>();
+            var existing = await _db.Initiatives
+                .Where(i => i.SiteId == request.SiteId
+                         && i.ReportPeriodId == request.ReportPeriodId
+                         && i.Type == parsedType)
+                .ToListAsync();
+            var bySerial = existing.ToDictionary(i => i.SerialNo);
+            var seenSerials = new HashSet<int>();
+
             for (int i = 0; i < request.Rows.Count; i++)
             {
                 var row = request.Rows[i];
@@ -53,29 +63,44 @@ namespace SiteReportApp.Services
                     result.RowsRejected++;
                     continue;
                 }
-
-                entities.Add(new Initiative
+                if (!seenSerials.Add(row.SerialNo))
                 {
-                    SiteId = request.SiteId,
-                    ReportPeriodId = request.ReportPeriodId,
-                    Type = parsedType,
-                    SerialNo = row.SerialNo,
-                    Name = row.Name,
-                    Department = row.Department,
-                    Category = row.Category,
-                    FacilitatorName = row.FacilitatorName,
-                    DepartmentHead = row.DepartmentHead,
-                    Status = status,
-                    Remarks = row.Remarks
-                });
+                    result.Errors.Add($"Row {i + 1}: duplicate serial no {row.SerialNo} in this upload");
+                    result.RowsRejected++;
+                    continue;
+                }
+
+                if (bySerial.TryGetValue(row.SerialNo, out var entity))
+                {
+                    entity.Name = row.Name;
+                    entity.Department = row.Department;
+                    entity.Category = row.Category;
+                    entity.FacilitatorName = row.FacilitatorName;
+                    entity.DepartmentHead = row.DepartmentHead;
+                    entity.Status = status;
+                    entity.Remarks = row.Remarks;
+                }
+                else
+                {
+                    _db.Initiatives.Add(new Initiative
+                    {
+                        SiteId = request.SiteId,
+                        ReportPeriodId = request.ReportPeriodId,
+                        Type = parsedType,
+                        SerialNo = row.SerialNo,
+                        Name = row.Name,
+                        Department = row.Department,
+                        Category = row.Category,
+                        FacilitatorName = row.FacilitatorName,
+                        DepartmentHead = row.DepartmentHead,
+                        Status = status,
+                        Remarks = row.Remarks
+                    });
+                }
+                result.RowsAccepted++;
             }
 
-            if (entities.Count > 0)
-            {
-                _db.Initiatives.AddRange(entities);
-                await _db.SaveChangesAsync();
-            }
-            result.RowsAccepted = entities.Count;
+            await _db.SaveChangesAsync();
             return result;
         }
 
@@ -85,7 +110,12 @@ namespace SiteReportApp.Services
             await EnsurePeriodIsOpenAsync(request.ReportPeriodId);
 
             var result = new ImportResultDto();
-            var entities = new List<TrainingRecord>();
+
+            var existing = await _db.TrainingRecords
+                .Where(t => t.SiteId == request.SiteId && t.ReportPeriodId == request.ReportPeriodId)
+                .ToListAsync();
+            var bySerial = existing.ToDictionary(t => t.SerialNo);
+            var seenSerials = new HashSet<int>();
 
             for (int i = 0; i < request.Rows.Count; i++)
             {
@@ -102,25 +132,37 @@ namespace SiteReportApp.Services
                     result.RowsRejected++;
                     continue;
                 }
-
-                entities.Add(new TrainingRecord
+                if (!seenSerials.Add(row.SerialNo))
                 {
-                    SiteId = request.SiteId,
-                    ReportPeriodId = request.ReportPeriodId,
-                    SerialNo = row.SerialNo,
-                    Topic = row.Topic,
-                    TrainingImpartedBy = row.TrainingImpartedBy,
-                    Department = row.Department,
-                    Status = status
-                });
+                    result.Errors.Add($"Row {i + 1}: duplicate serial no {row.SerialNo} in this upload");
+                    result.RowsRejected++;
+                    continue;
+                }
+
+                if (bySerial.TryGetValue(row.SerialNo, out var entity))
+                {
+                    entity.Topic = row.Topic;
+                    entity.TrainingImpartedBy = row.TrainingImpartedBy;
+                    entity.Department = row.Department;
+                    entity.Status = status;
+                }
+                else
+                {
+                    _db.TrainingRecords.Add(new TrainingRecord
+                    {
+                        SiteId = request.SiteId,
+                        ReportPeriodId = request.ReportPeriodId,
+                        SerialNo = row.SerialNo,
+                        Topic = row.Topic,
+                        TrainingImpartedBy = row.TrainingImpartedBy,
+                        Department = row.Department,
+                        Status = status
+                    });
+                }
+                result.RowsAccepted++;
             }
 
-            if (entities.Count > 0)
-            {
-                _db.TrainingRecords.AddRange(entities);
-                await _db.SaveChangesAsync();
-            }
-            result.RowsAccepted = entities.Count;
+            await _db.SaveChangesAsync();
             return result;
         }
 
@@ -130,7 +172,12 @@ namespace SiteReportApp.Services
             await EnsurePeriodIsOpenAsync(request.ReportPeriodId);
 
             var result = new ImportResultDto();
-            var entities = new List<CostSavingInitiative>();
+
+            var existing = await _db.CostSavingInitiatives
+                .Where(c => c.SiteId == request.SiteId && c.ReportPeriodId == request.ReportPeriodId)
+                .ToListAsync();
+            var bySerial = existing.ToDictionary(c => c.SerialNo);
+            var seenSerials = new HashSet<int>();
 
             for (int i = 0; i < request.Rows.Count; i++)
             {
@@ -153,26 +200,39 @@ namespace SiteReportApp.Services
                     result.RowsRejected++;
                     continue;
                 }
-
-                entities.Add(new CostSavingInitiative
+                if (!seenSerials.Add(row.SerialNo))
                 {
-                    SiteId = request.SiteId,
-                    ReportPeriodId = request.ReportPeriodId,
-                    SerialNo = row.SerialNo,
-                    ProjectName = row.ProjectName,
-                    PotentialSavingLacs = row.PotentialSavingLacs,
-                    ProjectStatus = status,
-                    ValidatedByFinance = row.ValidatedByFinance,
-                    Remarks = row.Remarks
-                });
+                    result.Errors.Add($"Row {i + 1}: duplicate serial no {row.SerialNo} in this upload");
+                    result.RowsRejected++;
+                    continue;
+                }
+
+                if (bySerial.TryGetValue(row.SerialNo, out var entity))
+                {
+                    entity.ProjectName = row.ProjectName;
+                    entity.PotentialSavingLacs = row.PotentialSavingLacs;
+                    entity.ProjectStatus = status;
+                    entity.ValidatedByFinance = row.ValidatedByFinance;
+                    entity.Remarks = row.Remarks;
+                }
+                else
+                {
+                    _db.CostSavingInitiatives.Add(new CostSavingInitiative
+                    {
+                        SiteId = request.SiteId,
+                        ReportPeriodId = request.ReportPeriodId,
+                        SerialNo = row.SerialNo,
+                        ProjectName = row.ProjectName,
+                        PotentialSavingLacs = row.PotentialSavingLacs,
+                        ProjectStatus = status,
+                        ValidatedByFinance = row.ValidatedByFinance,
+                        Remarks = row.Remarks
+                    });
+                }
+                result.RowsAccepted++;
             }
 
-            if (entities.Count > 0)
-            {
-                _db.CostSavingInitiatives.AddRange(entities);
-                await _db.SaveChangesAsync();
-            }
-            result.RowsAccepted = entities.Count;
+            await _db.SaveChangesAsync();
             return result;
         }
 
