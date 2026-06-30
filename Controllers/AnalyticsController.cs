@@ -46,6 +46,31 @@ namespace SiteReportApp.Controllers
             return Ok(data);
         }
 
+        // GET /api/analytics/range?fromYear=2025&fromMonth=1&toYear=2025&toMonth=6&granularity=monthly&siteId=2
+        // granularity: "monthly" (default) or "quarterly". siteId optional (omit for all sites).
+        // Powers the Analytics page: KPI cards, time-series charts, by-type / status / by-site breakdowns.
+        [HttpGet("range")]
+        public async Task<IActionResult> GetRange(
+            [FromQuery] int fromYear,
+            [FromQuery] int fromMonth,
+            [FromQuery] int toYear,
+            [FromQuery] int toMonth,
+            [FromQuery] string granularity = "monthly",
+            [FromQuery] int? siteId = null)
+        {
+            if (fromMonth < 1 || fromMonth > 12 || toMonth < 1 || toMonth > 12)
+                return BadRequest(new { error = "Month must be between 1 and 12." });
+            if (fromYear < 2000 || toYear < 2000)
+                return BadRequest(new { error = "Year looks invalid." });
+
+            var g = (granularity ?? "monthly").Trim().ToLowerInvariant();
+            if (g != "monthly" && g != "quarterly")
+                return BadRequest(new { error = "granularity must be 'monthly' or 'quarterly'." });
+
+            var data = await _analytics.GetRangeAnalyticsAsync(fromYear, fromMonth, toYear, toMonth, g, siteId);
+            return Ok(data);
+        }
+
         // GET /api/analytics/global-report?reportPeriodId=5
         // This single endpoint feeds the head-office "Monthly Global Report" screen/export
         [HttpGet("global-report")]
