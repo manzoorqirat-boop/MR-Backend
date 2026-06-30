@@ -1,8 +1,3 @@
-using Microsoft.EntityFrameworkCore;
-using SiteReportApp.Data;
-using SiteReportApp.Services;
-
-var builder = WebApplication.CreateBuilder(args);
 
 // ---- Database: Postgres on Railway ----
 // Railway injects DATABASE_URL like: postgres://user:pass@host:port/dbname
@@ -36,6 +31,11 @@ var frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL");
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
+using Microsoft.EntityFrameworkCore;
+using SiteReportApp.Data;
+using SiteReportApp.Services;
+
+var builder = WebApplication.CreateBuilder(args);
     {
         var origins = new List<string> { "http://localhost:5173" };
         if (!string.IsNullOrWhiteSpace(frontendUrl))
@@ -87,7 +87,7 @@ using (var scope = app.Services.CreateScope())
             ""ReportPeriodId"" integer NOT NULL,
             ""MetricKey""      character varying(64) NOT NULL,
             ""RowIndex""       integer NOT NULL,
-            ""CellsJson""      text NOT NULL DEFAULT '{}',
+            ""CellsJson""      text NOT NULL,
             CONSTRAINT ""FK_ScorecardEntries_Sites_SiteId""
                 FOREIGN KEY (""SiteId"") REFERENCES ""Sites"" (""Id"") ON DELETE RESTRICT,
             CONSTRAINT ""FK_ScorecardEntries_ReportPeriods_ReportPeriodId""
