@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SiteReportApp.Auth;
 using SiteReportApp.Data;
 using SiteReportApp.Dtos;
 using SiteReportApp.Services;
@@ -7,6 +9,7 @@ namespace SiteReportApp.Controllers
 {
     [ApiController]
     [Route("api/scorecard")]
+    [Authorize]
     public class ScorecardController : ControllerBase
     {
         private readonly ScorecardService _scorecard;
@@ -39,6 +42,7 @@ namespace SiteReportApp.Controllers
         public async Task<IActionResult> GetRows(
             [FromQuery] int siteId, [FromQuery] int reportPeriodId, [FromQuery] string metricKey)
         {
+            if (!User.CanAccessSite(siteId)) return Forbid();
             try
             {
                 var rows = await _scorecard.GetRowsAsync(siteId, reportPeriodId, metricKey);
@@ -54,6 +58,7 @@ namespace SiteReportApp.Controllers
         [HttpPost("rows")]
         public async Task<IActionResult> SaveRows([FromBody] ScorecardSaveDto dto)
         {
+            if (!User.CanAccessSite(dto.SiteId)) return Forbid();
             try
             {
                 var saved = await _scorecard.SaveAsync(dto);
@@ -70,6 +75,7 @@ namespace SiteReportApp.Controllers
         [HttpGet("status")]
         public async Task<IActionResult> GetStatus([FromQuery] int siteId, [FromQuery] int reportPeriodId)
         {
+            if (!User.CanAccessSite(siteId)) return Forbid();
             var counts = await _scorecard.GetRowCountsAsync(siteId, reportPeriodId);
             return Ok(counts);
         }
@@ -92,6 +98,7 @@ namespace SiteReportApp.Controllers
         public async Task<IActionResult> Import(
             [FromQuery] int siteId, [FromQuery] int reportPeriodId, IFormFile file)
         {
+            if (!User.CanAccessSite(siteId)) return Forbid();
             if (file == null || file.Length == 0)
                 return BadRequest(new { error = "No file uploaded." });
             if (!file.FileName.EndsWith(".xlsx", StringComparison.OrdinalIgnoreCase))
@@ -138,6 +145,13 @@ namespace SiteReportApp.Controllers
         {
             if (query.FromMonth is < 1 or > 12 || query.ToMonth is < 1 or > 12)
                 return BadRequest(new { error = "Month must be between 1 and 12." });
+            // Site users can only chart their own site's data.
+            if (!User.IsCorporate())
+            {
+                var ownSiteId = User.GetSiteId();
+                if (ownSiteId == null) return Forbid();
+                query.SiteIds = new List<int> { ownSiteId.Value };
+            }
             try
             {
                 var data = await _scorecard.GetAnalyticsAsync(query);
