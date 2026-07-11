@@ -1,10 +1,13 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SiteReportApp.Auth;
 using SiteReportApp.Services;
 
 namespace SiteReportApp.Controllers
 {
     [ApiController]
     [Route("api/analytics")]
+    [Authorize]
     public class AnalyticsController : ControllerBase
     {
         private readonly AnalyticsService _analytics;
