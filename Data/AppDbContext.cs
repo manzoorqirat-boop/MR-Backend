@@ -14,9 +14,24 @@ namespace SiteReportApp.Data
         public DbSet<TrainingRecord> TrainingRecords => Set<TrainingRecord>();
         public DbSet<CostSavingInitiative> CostSavingInitiatives => Set<CostSavingInitiative>();
         public DbSet<ScorecardEntry> ScorecardEntries => Set<ScorecardEntry>();
+        public DbSet<User> Users => Set<User>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            // ---- User ----
+            modelBuilder.Entity<User>()
+                .HasIndex(u => u.Username)
+                .IsUnique();
+
+            modelBuilder.Entity<User>()
+                .Property(u => u.Role)
+                .HasConversion<string>();
+
+            modelBuilder.Entity<User>()
+                .HasOne(u => u.Site)
+                .WithMany()
+                .HasForeignKey(u => u.SiteId)
+                .OnDelete(DeleteBehavior.Restrict);
             // ---- Site ----
             modelBuilder.Entity<Site>()
                 .HasIndex(s => s.Code)
@@ -31,6 +46,10 @@ namespace SiteReportApp.Data
             modelBuilder.Entity<SiteSubmission>()
                 .HasIndex(ss => new { ss.SiteId, ss.ReportPeriodId })
                 .IsUnique();
+
+            modelBuilder.Entity<SiteSubmission>()
+                .Property(ss => ss.Status)
+                .HasConversion<string>();
 
             modelBuilder.Entity<SiteSubmission>()
                 .HasOne(ss => ss.Site)
