@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SiteReportApp.Auth;
 using Microsoft.EntityFrameworkCore;
 using SiteReportApp.Data;
 using SiteReportApp.Dtos;
@@ -9,6 +11,7 @@ namespace SiteReportApp.Controllers
 {
     [ApiController]
     [Route("api/initiatives")]
+    [Authorize]
     public class InitiativesController : ControllerBase
     {
         private readonly DataEntryService _entry;
@@ -26,6 +29,7 @@ namespace SiteReportApp.Controllers
         public async Task<IActionResult> GetForSiteAndPeriod(
             [FromQuery] int siteId, [FromQuery] int reportPeriodId, [FromQuery] string type)
         {
+            if (!User.CanAccessSite(siteId)) return Forbid();
             if (!Enum.TryParse<InitiativeType>(type, ignoreCase: true, out var parsedType))
                 return BadRequest(new { error = $"Invalid initiative type: '{type}'" });
 
@@ -41,6 +45,7 @@ namespace SiteReportApp.Controllers
         [HttpPost("bulk")]
         public async Task<IActionResult> SaveBulk([FromBody] InitiativeBulkCreateDto request)
         {
+            if (!User.CanAccessSite(request.SiteId)) return Forbid();
             try
             {
                 var result = await _entry.SaveInitiativesAsync(request);
@@ -56,6 +61,8 @@ namespace SiteReportApp.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
+            var entity = await _db.Initiatives.FindAsync(id);
+            if (entity != null && !User.CanAccessSite(entity.SiteId)) return Forbid();
             try
             {
                 await _entry.DeleteInitiativeAsync(id);
