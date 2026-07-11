@@ -30,7 +30,8 @@ namespace SiteReportApp.Models
         public string DisplayName => $"{Year}-{Month:D2}";
     }
 
-    // Per-site submission tracking — was this site's data for this month submitted, and by whom
+    // Per-site submission tracking — one row per site+month. Carries the whole
+    // review workflow: the site submits, corporate approves or returns with comments.
     public class SiteSubmission
     {
         public int Id { get; set; }
@@ -38,8 +39,12 @@ namespace SiteReportApp.Models
         public Site Site { get; set; } = null!;
         public int ReportPeriodId { get; set; }
         public ReportPeriod ReportPeriod { get; set; } = null!;
-        public bool IsSubmitted { get; set; }
+        public bool IsSubmitted { get; set; }                    // kept for backward compat; true while Status is Submitted/Approved
+        public SubmissionStatus Status { get; set; } = SubmissionStatus.NotStarted;
         public DateTime? SubmittedAtUtc { get; set; }
         public string? SubmittedBy { get; set; }
+        public DateTime? ReviewedAtUtc { get; set; }
+        public string? ReviewedBy { get; set; }
+        public string? ReviewComments { get; set; }              // corporate feedback when returning for revision
     }
 }
