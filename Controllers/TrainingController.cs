@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SiteReportApp.Auth;
 using Microsoft.EntityFrameworkCore;
 using SiteReportApp.Data;
 using SiteReportApp.Dtos;
@@ -8,6 +10,7 @@ namespace SiteReportApp.Controllers
 {
     [ApiController]
     [Route("api/training")]
+    [Authorize]
     public class TrainingController : ControllerBase
     {
         private readonly DataEntryService _entry;
@@ -24,6 +27,7 @@ namespace SiteReportApp.Controllers
         [HttpGet]
         public async Task<IActionResult> GetForSiteAndPeriod([FromQuery] int siteId, [FromQuery] int reportPeriodId)
         {
+            if (!User.CanAccessSite(siteId)) return Forbid();
             var data = await _db.TrainingRecords
                 .Where(t => t.SiteId == siteId && t.ReportPeriodId == reportPeriodId)
                 .OrderBy(t => t.SerialNo)
@@ -35,6 +39,7 @@ namespace SiteReportApp.Controllers
         [HttpPost("bulk")]
         public async Task<IActionResult> SaveBulk([FromBody] TrainingBulkCreateDto request)
         {
+            if (!User.CanAccessSite(request.SiteId)) return Forbid();
             try
             {
                 var result = await _entry.SaveTrainingAsync(request);
@@ -50,6 +55,8 @@ namespace SiteReportApp.Controllers
         [HttpDelete("{id}")]
         public async Task<IActionResult> Delete(int id)
         {
+            var entity = await _db.TrainingRecords.FindAsync(id);
+            if (entity != null && !User.CanAccessSite(entity.SiteId)) return Forbid();
             try
             {
                 await _entry.DeleteTrainingAsync(id);
