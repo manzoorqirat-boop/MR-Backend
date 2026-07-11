@@ -1,4 +1,6 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using SiteReportApp.Auth;
 using Microsoft.EntityFrameworkCore;
 using SiteReportApp.Data;
 using SiteReportApp.Services;
@@ -7,6 +9,7 @@ namespace SiteReportApp.Controllers
 {
     [ApiController]
     [Route("api/excel-import")]
+    [Authorize]
     public class ExcelImportController : ControllerBase
     {
         private readonly ExcelImportService _excelImport;
@@ -30,6 +33,7 @@ namespace SiteReportApp.Controllers
             [FromQuery] int reportPeriodId,
             IFormFile file)
         {
+            if (!User.CanAccessSite(siteId)) return Forbid();
             if (file == null || file.Length == 0)
                 return BadRequest(new { error = "No file uploaded." });
 
