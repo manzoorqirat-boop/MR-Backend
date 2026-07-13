@@ -24,6 +24,18 @@ namespace SiteReportApp.Dtos
         public List<InitiativeCreateDto> Rows { get; set; } = new();
     }
 
+    // Update one saved initiative (workflow: progress its status, refine details)
+    public class InitiativeUpdateDto
+    {
+        public string Name { get; set; } = string.Empty;
+        public string Department { get; set; } = string.Empty;
+        public string? Category { get; set; }
+        public string FacilitatorName { get; set; } = string.Empty;
+        public string DepartmentHead { get; set; } = string.Empty;
+        public string Status { get; set; } = "NotStarted";
+        public string? Remarks { get; set; }
+    }
+
     // ---- Training (sheet 1) ----
     public class TrainingCreateDto
     {
