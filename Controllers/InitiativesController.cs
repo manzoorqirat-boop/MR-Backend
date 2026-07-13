@@ -41,7 +41,9 @@ namespace SiteReportApp.Controllers
                 {
                     i.Id, i.SiteId, i.ReportPeriodId, i.Type, i.SerialNo, i.Name, i.Department,
                     i.Category, i.FacilitatorName, i.DepartmentHead, i.Status, i.Remarks,
-                    AttachmentCount = _db.InitiativeAttachments.Count(a => a.InitiativeId == i.Id)
+                    AttachmentCount = _db.InitiativeAttachments.Count(a => a.InitiativeId == i.Id),
+                    PendingCrCount = _db.InitiativeChangeRequests.Count(
+                        cr => cr.InitiativeId == i.Id && cr.Status == ChangeRequestStatus.Pending)
                 })
                 .ToListAsync();
             return Ok(data);
@@ -58,6 +60,115 @@ namespace SiteReportApp.Controllers
             {
                 var updated = await _entry.UpdateInitiativeAsync(id, dto);
                 return Ok(updated);
+            }
+            catch (KeyNotFoundException) { return NotFound(); }
+            catch (InvalidOperationException ex) { return Conflict(new { error = ex.Message }); }
+        }
+
+        // ==================== Change requests (frozen-month corrections) ====================
+
+        private static object CrDto(InitiativeChangeRequest cr, Initiative? i = null) => new
+        {
+            cr.Id,
+            cr.InitiativeId,
+            initiativeName = (i ?? cr.Initiative)?.Name,
+            siteId = (i ?? cr.Initiative)?.SiteId,
+            requestType = cr.RequestType.ToString(),
+            originalJson = cr.OriginalJson,
+            proposedJson = cr.ProposedJson,
+            cr.Justification,
+            status = cr.Status.ToString(),
+            cr.RequestedBy,
+            cr.RequestedAtUtc,
+            cr.DecidedBy,
+            cr.DecidedAtUtc,
+            cr.DecisionComments
+        };
+
+        // POST /api/initiatives/5/change-requests — site raises a CR on a frozen row
+        [HttpPost("{id}/change-requests")]
+        public async Task<IActionResult> CreateChangeRequest(int id, [FromBody] ChangeRequestCreateDto dto)
+        {
+            var initiative = await _db.Initiatives.AsNoTracking().FirstOrDefaultAsync(i => i.Id == id);
+            if (initiative == null) return NotFound();
+            if (!User.CanAccessSite(initiative.SiteId)) return Forbid();
+            try
+            {
+                var cr = await _entry.CreateChangeRequestAsync(id, dto, User.GetDisplayName());
+                return Ok(CrDto(cr, initiative));
+            }
+            catch (KeyNotFoundException) { return NotFound(); }
+            catch (InvalidOperationException ex) { return Conflict(new { error = ex.Message }); }
+        }
+
+        // GET /api/initiatives/5/change-requests — CR history for one initiative
+        [HttpGet("{id}/change-requests")]
+        public async Task<IActionResult> GetChangeRequests(int id)
+        {
+            var initiative = await _db.Initiatives.AsNoTracking().FirstOrDefaultAsync(i => i.Id == id);
+            if (initiative == null) return NotFound();
+            if (!User.CanAccessSite(initiative.SiteId)) return Forbid();
+
+            var list = await _db.InitiativeChangeRequests
+                .Where(cr => cr.InitiativeId == id)
+                .OrderByDescending(cr => cr.RequestedAtUtc)
+                .ToListAsync();
+            return Ok(list.Select(cr => CrDto(cr, initiative)));
+        }
+
+        // GET /api/initiatives/change-requests?status=Pending — review queue.
+        // Corporate sees every site; site users see only their own site's requests.
+        [HttpGet("change-requests")]
+        public async Task<IActionResult> ListChangeRequests([FromQuery] string status = "Pending")
+        {
+            if (!Enum.TryParse<ChangeRequestStatus>(status, ignoreCase: true, out var parsed))
+                return BadRequest(new { error = $"Invalid status '{status}'." });
+
+            var query = _db.InitiativeChangeRequests
+                .Include(cr => cr.Initiative).ThenInclude(i => i.Site)
+                .Include(cr => cr.Initiative).ThenInclude(i => i.ReportPeriod)
+                .Where(cr => cr.Status == parsed);
+
+            if (!User.IsCorporate())
+            {
+                var siteId = User.GetSiteId();
+                query = query.Where(cr => cr.Initiative.SiteId == siteId);
+            }
+
+            var list = await query.OrderBy(cr => cr.RequestedAtUtc).ToListAsync();
+            return Ok(list.Select(cr => new
+            {
+                cr.Id,
+                cr.InitiativeId,
+                initiativeName = cr.Initiative.Name,
+                initiativeType = cr.Initiative.Type.ToString(),
+                siteId = cr.Initiative.SiteId,
+                siteName = cr.Initiative.Site.Name,
+                periodLabel = $"{cr.Initiative.ReportPeriod.Year}-{cr.Initiative.ReportPeriod.Month:00}",
+                requestType = cr.RequestType.ToString(),
+                originalJson = cr.OriginalJson,
+                proposedJson = cr.ProposedJson,
+                cr.Justification,
+                status = cr.Status.ToString(),
+                cr.RequestedBy,
+                cr.RequestedAtUtc,
+                cr.DecidedBy,
+                cr.DecidedAtUtc,
+                cr.DecisionComments
+            }));
+        }
+
+        // POST /api/initiatives/change-requests/7/decide — corporate approves/rejects.
+        // Approval applies the change (or deletion) immediately, bypassing the
+        // freeze — that is the entire point of the workflow.
+        [HttpPost("change-requests/{crId}/decide")]
+        [Authorize(Roles = "Corporate")]
+        public async Task<IActionResult> DecideChangeRequest(int crId, [FromBody] ChangeRequestDecisionDto dto)
+        {
+            try
+            {
+                var cr = await _entry.DecideChangeRequestAsync(crId, dto, User.GetDisplayName());
+                return Ok(new { cr.Id, status = cr.Status.ToString(), cr.DecidedBy, cr.DecidedAtUtc, cr.DecisionComments });
             }
             catch (KeyNotFoundException) { return NotFound(); }
             catch (InvalidOperationException ex) { return Conflict(new { error = ex.Message }); }
