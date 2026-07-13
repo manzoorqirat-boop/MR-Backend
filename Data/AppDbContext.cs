@@ -15,9 +15,20 @@ namespace SiteReportApp.Data
         public DbSet<CostSavingInitiative> CostSavingInitiatives => Set<CostSavingInitiative>();
         public DbSet<ScorecardEntry> ScorecardEntries => Set<ScorecardEntry>();
         public DbSet<User> Users => Set<User>();
+        public DbSet<InitiativeAttachment> InitiativeAttachments => Set<InitiativeAttachment>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            // ---- InitiativeAttachment ----
+            modelBuilder.Entity<InitiativeAttachment>()
+                .HasOne(a => a.Initiative)
+                .WithMany()
+                .HasForeignKey(a => a.InitiativeId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<InitiativeAttachment>()
+                .HasIndex(a => a.InitiativeId);
+
             // ---- User ----
             modelBuilder.Entity<User>()
                 .HasIndex(u => u.Username)
