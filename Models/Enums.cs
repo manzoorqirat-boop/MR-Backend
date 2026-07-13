@@ -46,6 +46,11 @@ namespace SiteReportApp.Models
         Corporate = 1
     }
 
+    // Change request lifecycle for frozen initiatives:
+    //  Pending -> Approved (changes applied) | Rejected (with comments)
+    public enum ChangeRequestStatus { Pending = 0, Approved = 1, Rejected = 2 }
+    public enum ChangeRequestType { Update = 0, Delete = 1 }
+
     // Lifecycle of one site's monthly submission to corporate.
     //  NotStarted -> (site enters data) -> Submitted -> Approved
     //                                          \-> Returned (with comments) -> Submitted ...
