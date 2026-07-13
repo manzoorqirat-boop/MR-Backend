@@ -16,9 +16,28 @@ namespace SiteReportApp.Data
         public DbSet<ScorecardEntry> ScorecardEntries => Set<ScorecardEntry>();
         public DbSet<User> Users => Set<User>();
         public DbSet<InitiativeAttachment> InitiativeAttachments => Set<InitiativeAttachment>();
+        public DbSet<InitiativeChangeRequest> InitiativeChangeRequests => Set<InitiativeChangeRequest>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            // ---- InitiativeChangeRequest ----
+            modelBuilder.Entity<InitiativeChangeRequest>()
+                .HasOne(cr => cr.Initiative)
+                .WithMany()
+                .HasForeignKey(cr => cr.InitiativeId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            modelBuilder.Entity<InitiativeChangeRequest>()
+                .Property(cr => cr.Status)
+                .HasConversion<string>();
+
+            modelBuilder.Entity<InitiativeChangeRequest>()
+                .Property(cr => cr.RequestType)
+                .HasConversion<string>();
+
+            modelBuilder.Entity<InitiativeChangeRequest>()
+                .HasIndex(cr => new { cr.InitiativeId, cr.Status });
+
             // ---- InitiativeAttachment ----
             modelBuilder.Entity<InitiativeAttachment>()
                 .HasOne(a => a.Initiative)
