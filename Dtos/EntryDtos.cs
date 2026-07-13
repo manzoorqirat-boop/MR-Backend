@@ -36,6 +36,21 @@ namespace SiteReportApp.Dtos
         public string? Remarks { get; set; }
     }
 
+    // Raise a change request on a frozen initiative
+    public class ChangeRequestCreateDto
+    {
+        public string RequestType { get; set; } = "Update";   // "Update" | "Delete"
+        public string Justification { get; set; } = string.Empty;
+        public InitiativeUpdateDto? Proposed { get; set; }    // required for Update
+    }
+
+    // Corporate decision on a change request
+    public class ChangeRequestDecisionDto
+    {
+        public string Decision { get; set; } = string.Empty;  // "Approve" | "Reject"
+        public string? Comments { get; set; }
+    }
+
     // ---- Training (sheet 1) ----
     public class TrainingCreateDto
     {
