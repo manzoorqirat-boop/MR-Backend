@@ -380,6 +380,30 @@ namespace SiteReportApp.Services
         }
 
         // ---- Delete a single row (used when correcting a mistaken entry) ----
+        // Workflow: update a saved initiative in place (status progress, corrections).
+        public async Task<Initiative> UpdateInitiativeAsync(int id, InitiativeUpdateDto dto)
+        {
+            var entity = await _db.Initiatives.FindAsync(id)
+                ?? throw new KeyNotFoundException();
+            await EnsureSiteEditableAsync(entity.SiteId, entity.ReportPeriodId);
+
+            if (!Enum.TryParse<CompletionStatus>(dto.Status, ignoreCase: true, out var status))
+                throw new InvalidOperationException($"Invalid status '{dto.Status}'.");
+            if (string.IsNullOrWhiteSpace(dto.Name) || string.IsNullOrWhiteSpace(dto.Department))
+                throw new InvalidOperationException("Name and Department are required.");
+
+            entity.Name = dto.Name.Trim();
+            entity.Department = dto.Department.Trim();
+            entity.Category = string.IsNullOrWhiteSpace(dto.Category) ? null : dto.Category.Trim();
+            entity.FacilitatorName = dto.FacilitatorName?.Trim() ?? "";
+            entity.DepartmentHead = dto.DepartmentHead?.Trim() ?? "";
+            entity.Status = status;
+            entity.Remarks = string.IsNullOrWhiteSpace(dto.Remarks) ? null : dto.Remarks.Trim();
+
+            await _db.SaveChangesAsync();
+            return entity;
+        }
+
         public async Task DeleteInitiativeAsync(int id)
         {
             var entity = await _db.Initiatives.FindAsync(id);
