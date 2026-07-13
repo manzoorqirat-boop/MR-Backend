@@ -404,6 +404,137 @@ namespace SiteReportApp.Services
             return entity;
         }
 
+        // ==================== Initiative change requests ====================
+        // Once a month is submitted/approved, initiatives are frozen; corrections
+        // go through a change request that corporate approves or rejects.
+
+        private static string SerializeEditable(Initiative i) =>
+            System.Text.Json.JsonSerializer.Serialize(new
+            {
+                name = i.Name,
+                department = i.Department,
+                category = i.Category,
+                facilitatorName = i.FacilitatorName,
+                departmentHead = i.DepartmentHead,
+                status = i.Status.ToString(),
+                remarks = i.Remarks
+            });
+
+        public async Task<InitiativeChangeRequest> CreateChangeRequestAsync(
+            int initiativeId, ChangeRequestCreateDto dto, string requestedBy)
+        {
+            var initiative = await _db.Initiatives.FindAsync(initiativeId)
+                ?? throw new KeyNotFoundException();
+
+            var period = await _db.ReportPeriods.FindAsync(initiative.ReportPeriodId);
+            if (period?.Status == ReportPeriodStatus.Locked)
+                throw new InvalidOperationException("This report period is locked — no further changes are possible.");
+
+            if (string.IsNullOrWhiteSpace(dto.Justification))
+                throw new InvalidOperationException("A justification is required for a change request.");
+
+            if (!Enum.TryParse<ChangeRequestType>(dto.RequestType, ignoreCase: true, out var type))
+                throw new InvalidOperationException($"Invalid request type '{dto.RequestType}'.");
+
+            var hasPending = await _db.InitiativeChangeRequests
+                .AnyAsync(cr => cr.InitiativeId == initiativeId && cr.Status == ChangeRequestStatus.Pending);
+            if (hasPending)
+                throw new InvalidOperationException("This initiative already has a pending change request. Wait for corporate to decide it first.");
+
+            string proposedJson = "{}";
+            if (type == ChangeRequestType.Update)
+            {
+                if (dto.Proposed == null)
+                    throw new InvalidOperationException("Proposed values are required for an update request.");
+                if (string.IsNullOrWhiteSpace(dto.Proposed.Name) || string.IsNullOrWhiteSpace(dto.Proposed.Department))
+                    throw new InvalidOperationException("Name and Department are required.");
+                if (!Enum.TryParse<CompletionStatus>(dto.Proposed.Status, ignoreCase: true, out _))
+                    throw new InvalidOperationException($"Invalid status '{dto.Proposed.Status}'.");
+                proposedJson = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    name = dto.Proposed.Name.Trim(),
+                    department = dto.Proposed.Department.Trim(),
+                    category = string.IsNullOrWhiteSpace(dto.Proposed.Category) ? null : dto.Proposed.Category.Trim(),
+                    facilitatorName = dto.Proposed.FacilitatorName?.Trim() ?? "",
+                    departmentHead = dto.Proposed.DepartmentHead?.Trim() ?? "",
+                    status = dto.Proposed.Status,
+                    remarks = string.IsNullOrWhiteSpace(dto.Proposed.Remarks) ? null : dto.Proposed.Remarks.Trim()
+                });
+            }
+
+            var cr = new InitiativeChangeRequest
+            {
+                InitiativeId = initiativeId,
+                RequestType = type,
+                OriginalJson = SerializeEditable(initiative),
+                ProposedJson = proposedJson,
+                Justification = dto.Justification.Trim(),
+                Status = ChangeRequestStatus.Pending,
+                RequestedBy = requestedBy,
+                RequestedAtUtc = DateTime.UtcNow
+            };
+            _db.InitiativeChangeRequests.Add(cr);
+            await _db.SaveChangesAsync();
+            return cr;
+        }
+
+        public async Task<InitiativeChangeRequest> DecideChangeRequestAsync(
+            int crId, ChangeRequestDecisionDto dto, string decidedBy)
+        {
+            var cr = await _db.InitiativeChangeRequests
+                .Include(c => c.Initiative)
+                .FirstOrDefaultAsync(c => c.Id == crId)
+                ?? throw new KeyNotFoundException();
+
+            if (cr.Status != ChangeRequestStatus.Pending)
+                throw new InvalidOperationException("This change request has already been decided.");
+
+            var period = await _db.ReportPeriods.FindAsync(cr.Initiative.ReportPeriodId);
+            if (period?.Status == ReportPeriodStatus.Locked)
+                throw new InvalidOperationException("This report period is locked — the change request can no longer be applied.");
+
+            var decision = dto.Decision?.Trim().ToLowerInvariant();
+            if (decision == "reject")
+            {
+                if (string.IsNullOrWhiteSpace(dto.Comments))
+                    throw new InvalidOperationException("Comments are required when rejecting a change request.");
+                cr.Status = ChangeRequestStatus.Rejected;
+            }
+            else if (decision == "approve")
+            {
+                if (cr.RequestType == ChangeRequestType.Delete)
+                {
+                    _db.Initiatives.Remove(cr.Initiative); // attachments cascade
+                }
+                else
+                {
+                    var p = System.Text.Json.JsonSerializer.Deserialize<InitiativeUpdateDto>(
+                        cr.ProposedJson,
+                        new System.Text.Json.JsonSerializerOptions { PropertyNameCaseInsensitive = true })
+                        ?? throw new InvalidOperationException("Stored proposal could not be read.");
+                    Enum.TryParse<CompletionStatus>(p.Status, ignoreCase: true, out var status);
+                    cr.Initiative.Name = p.Name;
+                    cr.Initiative.Department = p.Department;
+                    cr.Initiative.Category = p.Category;
+                    cr.Initiative.FacilitatorName = p.FacilitatorName;
+                    cr.Initiative.DepartmentHead = p.DepartmentHead;
+                    cr.Initiative.Status = status;
+                    cr.Initiative.Remarks = p.Remarks;
+                }
+                cr.Status = ChangeRequestStatus.Approved;
+            }
+            else
+            {
+                throw new InvalidOperationException($"Unknown decision '{dto.Decision}'. Use 'Approve' or 'Reject'.");
+            }
+
+            cr.DecidedBy = decidedBy;
+            cr.DecidedAtUtc = DateTime.UtcNow;
+            cr.DecisionComments = string.IsNullOrWhiteSpace(dto.Comments) ? null : dto.Comments.Trim();
+            await _db.SaveChangesAsync();
+            return cr;
+        }
+
         public async Task DeleteInitiativeAsync(int id)
         {
             var entity = await _db.Initiatives.FindAsync(id);
