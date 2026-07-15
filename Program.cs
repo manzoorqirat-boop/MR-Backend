@@ -176,6 +176,11 @@ using (var scope = app.Services.CreateScope())
         );
         CREATE UNIQUE INDEX IF NOT EXISTS ""IX_Users_Username"" ON ""Users"" (""Username"");
 
+        -- Users.Email was added after the table above first shipped (reminder
+        -- notifications feature). CREATE TABLE IF NOT EXISTS is a no-op once the
+        -- table exists, so the column needs its own additive statement here.
+        ALTER TABLE ""Users"" ADD COLUMN IF NOT EXISTS ""Email"" text NULL;
+
         -- ---- Review workflow columns on SiteSubmissions (additive, idempotent) ----
         ALTER TABLE ""SiteSubmissions"" ADD COLUMN IF NOT EXISTS ""Status""         text NOT NULL DEFAULT 'NotStarted';
         ALTER TABLE ""SiteSubmissions"" ADD COLUMN IF NOT EXISTS ""ReviewedAtUtc""  timestamp with time zone NULL;
