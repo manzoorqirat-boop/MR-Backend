@@ -41,6 +41,23 @@ namespace SiteReportApp.Controllers
             return Ok(data);
         }
 
+        // POST /api/analytics/cost-savings — log a new cost-saving item against a site/period.
+        // (New table, so this is the only way data gets into it — there's no scorecard sheet for it.)
+        [HttpPost("cost-savings")]
+        public async Task<IActionResult> CreateCostSaving([FromBody] SiteReportApp.Dtos.CostSavingCreateDto dto)
+        {
+            if (!User.CanAccessSite(dto.SiteId)) return Forbid();
+            try
+            {
+                var created = await _analytics.AddCostSavingAsync(dto, User.GetDisplayName());
+                return Ok(new { created.Id });
+            }
+            catch (InvalidOperationException ex)
+            {
+                return BadRequest(new { error = ex.Message });
+            }
+        }
+
         // GET /api/analytics/cost-savings/trend?lastNMonths=6
         [HttpGet("cost-savings/trend")]
         public async Task<IActionResult> GetCostSavingTrend([FromQuery] int lastNMonths = 6)
