@@ -58,16 +58,20 @@ builder.Services.AddAuthorization();
 // The deployed frontend origin comes from the FRONTEND_URL env var (set this on the
 // backend's Railway service to your frontend's public URL, e.g.
 // https://your-frontend.up.railway.app). localhost:5173 is always allowed for local dev.
+//
+// IMPORTANT: if FRONTEND_URL is missing or wrong on Railway, requests from your
+// production frontend will be silently blocked by the browser's CORS check with
+// no server-side error logged — which is why we log the resolved origin list below.
 var frontendUrl = Environment.GetEnvironmentVariable("FRONTEND_URL");
+var corsOrigins = new List<string> { "http://localhost:5173" };
+if (!string.IsNullOrWhiteSpace(frontendUrl))
+    corsOrigins.Add(frontendUrl.TrimEnd('/'));
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowFrontend", policy =>
     {
-        var origins = new List<string> { "http://localhost:5173" };
-        if (!string.IsNullOrWhiteSpace(frontendUrl))
-            origins.Add(frontendUrl.TrimEnd('/'));
-
-        policy.WithOrigins(origins.ToArray())
+        policy.WithOrigins(corsOrigins.ToArray())
               .AllowAnyHeader()
               .AllowAnyMethod();
     });
@@ -88,6 +92,15 @@ var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
 
 var app = builder.Build();
+
+// ---- Log the resolved CORS origins on every boot ----
+// Check this in Railway's deploy logs whenever you see CORS errors in the browser —
+// if the frontend's URL isn't in this list, FRONTEND_URL is missing/wrong on this
+// service's Railway Variables tab.
+app.Logger.LogInformation(
+    "CORS: allowing origins -> {Origins} (FRONTEND_URL env var was {FrontendUrlStatus})",
+    string.Join(", ", corsOrigins),
+    string.IsNullOrWhiteSpace(frontendUrl) ? "NOT SET" : $"'{frontendUrl}'");
 
 // ---- Ensure the database schema exists ----
 // On a fresh Railway Postgres there are no tables yet, so every query would 500.
