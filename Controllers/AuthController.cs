@@ -18,6 +18,7 @@ namespace SiteReportApp.Controllers
     {
         public string Username { get; set; } = string.Empty;
         public string DisplayName { get; set; } = string.Empty;
+        public string? Email { get; set; }
         public string Password { get; set; } = string.Empty;
         public string Role { get; set; } = "SiteUser";   // "SiteUser" | "Corporate"
         public int? SiteId { get; set; }
@@ -26,6 +27,11 @@ namespace SiteReportApp.Controllers
     public class PasswordResetDto
     {
         public string NewPassword { get; set; } = string.Empty;
+    }
+
+    public class EmailUpdateDto
+    {
+        public string? Email { get; set; }
     }
 
     [ApiController]
@@ -46,6 +52,7 @@ namespace SiteReportApp.Controllers
             id = u.Id,
             username = u.Username,
             displayName = u.DisplayName,
+            email = u.Email,
             role = u.Role.ToString(),
             siteId = u.SiteId,
             siteName = u.Site?.Name,
@@ -115,6 +122,7 @@ namespace SiteReportApp.Controllers
             {
                 Username = username,
                 DisplayName = string.IsNullOrWhiteSpace(dto.DisplayName) ? username : dto.DisplayName.Trim(),
+                Email = string.IsNullOrWhiteSpace(dto.Email) ? null : dto.Email.Trim(),
                 PasswordHash = AuthService.HashPassword(dto.Password),
                 Role = role,
                 SiteId = role == UserRole.Corporate ? null : dto.SiteId,
