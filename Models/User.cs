@@ -8,6 +8,7 @@ namespace SiteReportApp.Models
         public int Id { get; set; }
         public string Username { get; set; } = string.Empty;      // unique, case-insensitive
         public string DisplayName { get; set; } = string.Empty;
+        public string? Email { get; set; }                        // reminder notifications go here
         public string PasswordHash { get; set; } = string.Empty;  // PBKDF2, format: iterations.saltB64.hashB64
         public UserRole Role { get; set; } = UserRole.SiteUser;
         public int? SiteId { get; set; }                          // required when Role == SiteUser
