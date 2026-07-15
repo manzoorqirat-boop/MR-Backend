@@ -18,6 +18,7 @@ namespace SiteReportApp.Data
         public DbSet<MasterListItem> MasterListItems => Set<MasterListItem>();
         public DbSet<QaItRegister> QaItRegisters => Set<QaItRegister>();
         public DbSet<QaItPeriodicReview> QaItPeriodicReviews => Set<QaItPeriodicReview>();
+        public DbSet<CostSaving> CostSavings => Set<CostSaving>();
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -63,6 +64,26 @@ namespace SiteReportApp.Data
                 .WithMany()
                 .HasForeignKey(r => r.SiteId)
                 .OnDelete(DeleteBehavior.Cascade);
+
+            // ---- Cost Savings (Analytics) ----
+            modelBuilder.Entity<CostSaving>()
+                .HasIndex(c => new { c.SiteId, c.ReportPeriodId });
+
+            modelBuilder.Entity<CostSaving>()
+                .Property(c => c.AmountSaved)
+                .HasColumnType("numeric(18,2)");
+
+            modelBuilder.Entity<CostSaving>()
+                .HasOne(c => c.Site)
+                .WithMany()
+                .HasForeignKey(c => c.SiteId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            modelBuilder.Entity<CostSaving>()
+                .HasOne(c => c.ReportPeriod)
+                .WithMany()
+                .HasForeignKey(c => c.ReportPeriodId)
+                .OnDelete(DeleteBehavior.Restrict);
 
             // ---- User ----
             modelBuilder.Entity<User>()
