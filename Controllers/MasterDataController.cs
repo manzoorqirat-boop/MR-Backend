@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using SiteReportApp.Auth;
 using SiteReportApp.Data;
 using SiteReportApp.Models;
+using SiteReportApp.Services;
 
 namespace SiteReportApp.Controllers
 {
@@ -33,10 +34,51 @@ namespace SiteReportApp.Controllers
     public class MasterDataController : ControllerBase
     {
         private readonly AppDbContext _db;
+        private readonly MasterDataExcelService _excel;
 
-        public MasterDataController(AppDbContext db)
+        public MasterDataController(AppDbContext db, MasterDataExcelService excel)
         {
             _db = db;
+            _excel = excel;
+        }
+
+        // ==================== Excel template + bulk import ====================
+
+        // GET /api/master/template — the standard workbook: Equipment,
+        // Departments, System Categories + a Locations reference sheet.
+        [HttpGet("template")]
+        [Authorize(Roles = "Corporate")]
+        public async Task<IActionResult> DownloadTemplate()
+        {
+            var bytes = await _excel.BuildTemplateAsync();
+            return File(bytes,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "MasterData_Template.xlsx");
+        }
+
+        // POST /api/master/import — multipart upload of the filled template.
+        // Valid rows are applied; problem rows come back as per-row errors.
+        [HttpPost("import")]
+        [Authorize(Roles = "Corporate")]
+        [RequestSizeLimit(10 * 1024 * 1024)]
+        public async Task<IActionResult> Import(IFormFile file)
+        {
+            if (file == null || file.Length == 0)
+                return BadRequest(new { error = "No file uploaded." });
+            var ext = Path.GetExtension(file.FileName);
+            if (!string.Equals(ext, ".xlsx", StringComparison.OrdinalIgnoreCase))
+                return BadRequest(new { error = "Please upload an .xlsx file (use the downloaded template)." });
+
+            try
+            {
+                using var stream = file.OpenReadStream();
+                var result = await _excel.ImportAsync(stream);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return Conflict(new { error = $"The file could not be read as an Excel workbook: {ex.Message}" });
+            }
         }
 
         // ==================== Equipment / Instrument master ====================
