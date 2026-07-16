@@ -33,6 +33,7 @@ builder.Services.AddScoped<ScorecardService>();
 builder.Services.AddScoped<ScorecardExcelService>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<AnalyticsService>();
+builder.Services.AddScoped<MasterDataExcelService>();
 builder.Services.AddScoped<EmailService>();
 // The reminder scheduler is a singleton hosted service; the Admin page's
 // "run now" button (ReminderSettingsController) reuses the same instance.
