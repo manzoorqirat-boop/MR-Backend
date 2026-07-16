@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using SiteReportApp.Auth;
 using SiteReportApp.Data;
 using SiteReportApp.Models;
+using SiteReportApp.Services;
 
 namespace SiteReportApp.Controllers
 {
@@ -39,10 +40,51 @@ namespace SiteReportApp.Controllers
     public class QaItComplianceController : ControllerBase
     {
         private readonly AppDbContext _db;
+        private readonly QaItExcelService _excel;
 
-        public QaItComplianceController(AppDbContext db)
+        public QaItComplianceController(AppDbContext db, QaItExcelService excel)
         {
             _db = db;
+            _excel = excel;
+        }
+
+        // GET /api/qa-it/periodic-reviews/template?siteId=1 — the standard
+        // upload workbook, with reference sheets for this location's masters.
+        [HttpGet("template")]
+        public async Task<IActionResult> DownloadTemplate([FromQuery] int siteId)
+        {
+            if (!User.CanAccessSite(siteId)) return Forbid();
+            var bytes = await _excel.BuildTemplateAsync(siteId);
+            return File(bytes,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                "QaIt_PeriodicReview_Template.xlsx");
+        }
+
+        // POST /api/qa-it/periodic-reviews/import?siteId=1 — parse the filled
+        // template. Side effect: new equipment/departments/categories are added
+        // to MASTER DATA (case-insensitive dedup — no repeats). The parsed rows
+        // are returned to the register grid for review + save.
+        [HttpPost("import")]
+        [RequestSizeLimit(10 * 1024 * 1024)]
+        public async Task<IActionResult> Import([FromQuery] int siteId, IFormFile file)
+        {
+            if (!User.CanAccessSite(siteId)) return Forbid();
+            if (file == null || file.Length == 0)
+                return BadRequest(new { error = "No file uploaded." });
+            var ext = Path.GetExtension(file.FileName);
+            if (!string.Equals(ext, ".xlsx", StringComparison.OrdinalIgnoreCase))
+                return BadRequest(new { error = "Please upload an .xlsx file (use the downloaded template)." });
+
+            try
+            {
+                using var stream = file.OpenReadStream();
+                var result = await _excel.ImportAsync(siteId, stream);
+                return Ok(result);
+            }
+            catch (Exception ex)
+            {
+                return Conflict(new { error = $"The file could not be read as an Excel workbook: {ex.Message}" });
+            }
         }
 
         // GET /api/qa-it/periodic-reviews?siteId=1&year=2026
