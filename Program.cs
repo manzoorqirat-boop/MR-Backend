@@ -33,6 +33,11 @@ builder.Services.AddScoped<ScorecardService>();
 builder.Services.AddScoped<ScorecardExcelService>();
 builder.Services.AddScoped<AuthService>();
 builder.Services.AddScoped<AnalyticsService>();
+builder.Services.AddScoped<EmailService>();
+// The reminder scheduler is a singleton hosted service; the Admin page's
+// "run now" button (ReminderSettingsController) reuses the same instance.
+builder.Services.AddSingleton<ReviewReminderService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<ReviewReminderService>());
 
 // ---- Authentication: JWT bearer tokens issued by AuthService ----
 // Set JWT_SECRET on the backend service in production. Site users carry a
