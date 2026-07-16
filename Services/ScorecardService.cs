@@ -34,7 +34,7 @@ namespace SiteReportApp.Services
             }).ToList()
         };
 
-        // ---- Guard: block writes if the period is locked ----
+        // ---- Guard: block writes if the period is locked or the site's month is with corporate ----
         private async Task EnsurePeriodIsOpenAsync(int reportPeriodId)
         {
             var period = await _db.ReportPeriods.FindAsync(reportPeriodId);
@@ -43,13 +43,27 @@ namespace SiteReportApp.Services
                 throw new InvalidOperationException($"Report period {period.DisplayName} is locked and cannot be edited.");
         }
 
+        private async Task EnsureSiteEditableAsync(int siteId, int reportPeriodId)
+        {
+            await EnsurePeriodIsOpenAsync(reportPeriodId);
+            var submission = await _db.SiteSubmissions
+                .FirstOrDefaultAsync(ss => ss.SiteId == siteId && ss.ReportPeriodId == reportPeriodId);
+            if (submission == null) return;
+            if (submission.Status == SubmissionStatus.Submitted)
+                throw new InvalidOperationException(
+                    "This month has been submitted to corporate and is awaiting review. It cannot be edited unless corporate returns it for revision.");
+            if (submission.Status == SubmissionStatus.Approved)
+                throw new InvalidOperationException(
+                    "This month has been approved by corporate and can no longer be edited.");
+        }
+
         // ---- Save (replace) a metric's rows for a site/period ----
         // Replace semantics: the incoming set fully defines this site/period/metric, so we
         // delete any existing rows first. This keeps multi-row sheets consistent (no orphan
         // rows after a row is removed in the UI) and makes re-imports idempotent.
         public async Task<int> SaveAsync(ScorecardSaveDto dto)
         {
-            await EnsurePeriodIsOpenAsync(dto.ReportPeriodId);
+            await EnsureSiteEditableAsync(dto.SiteId, dto.ReportPeriodId);
             var metric = ScorecardSchema.Find(dto.MetricKey)
                 ?? throw new InvalidOperationException($"Unknown metric '{dto.MetricKey}'.");
 
